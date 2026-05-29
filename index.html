@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — AI Surveillance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0e1117;
+  --surface:#161b26;
+  --surface2:#1d2333;
+  --border:#2a3347;
+  --blue:#2563eb;
+  --blue-light:#3b82f6;
+  --sky:#0ea5e9;
+  --red:#dc2626;
+  --amber:#d97706;
+  --green:#059669;
+  --white:#f8fafc;
+  --silver:#94a3b8;
+  --muted:#475569;
+  --hh:52px;
+  --nh:68px;
+}
+html,body{width:100%;height:100%;background:var(--bg);font-family:'Plus Jakarta Sans',sans-serif;color:var(--white);overflow:hidden}
+
+/* SCAN LINE */
+.scanline{position:fixed;width:100%;height:1px;background:linear-gradient(90deg,transparent 0%,rgba(37,99,235,0.3) 50%,transparent 100%);animation:scanmove 12s linear infinite;pointer-events:none;z-index:9999;opacity:.4}
+@keyframes scanmove{0%{top:0}100%{top:100vh}}
+
+/* PROGRESS */
+#prog{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--sky));transition:width .5s;z-index:1001}
+
+/* HEADER */
+.hdr{
+  position:fixed;top:0;left:0;right:0;height:var(--hh);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;
+  background:rgba(14,17,23,0.95);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);
+  z-index:9997;
+}
+.logo{
+  font-family:'Inter',sans-serif;
+  font-size:18px;font-weight:800;letter-spacing:-0.5px;
+  color:var(--white);
+  letter-spacing:1px;
+}
+.logo span{color:var(--sky);}
+.hdr-year{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;color:var(--muted);
+  letter-spacing:1px;
+}
+
+/* NAV */
+.nav{
+  position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;
+  background:rgba(14,17,23,0.95);border:1px solid var(--border);
+  padding:8px 14px;border-radius:40px;backdrop-filter:blur(20px);z-index:9999;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.nbtn{width:44px;height:44px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--silver);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none;}
+.nbtn:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+.ndots{display:flex;gap:5px;align-items:center}
+.ndot{width:5px;height:5px;border-radius:50%;background:var(--muted);cursor:pointer;transition:all .2s;padding:6px;background-clip:content-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.ndot.on{background:var(--sky);width:20px;border-radius:3px}
+.nnum{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);min-width:34px;text-align:center}
+
+/* DECK */
+.deck{position:fixed;inset:0;z-index:1}
+.slide{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:calc(var(--hh) + 24px) 60px calc(var(--nh) + 20px);
+  opacity:0;pointer-events:none;transition:opacity .05s;overflow:hidden;z-index:1;
+}
+
+.slide.on{opacity:1;pointer-events:all}
+
+/* NOISE TEXTURE overlay */
+.slide::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size:200px 200px;opacity:.4;
+}
+
+/* ANIMATIONS */
+@keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes left{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scalein{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.slide.on .u{animation:up .6s both}
+.slide.on .ul{animation:left .6s both}
+.slide.on .sc{animation:scalein .6s both}
+.slide:not(.on) .u,.slide:not(.on) .ul,.slide:not(.on) .sc{animation:none!important;opacity:0!important}
+.d1{animation-delay:.05s!important}.d2{animation-delay:.15s!important}.d3{animation-delay:.25s!important}
+.d4{animation-delay:.35s!important}.d5{animation-delay:.45s!important}.d6{animation-delay:.55s!important}
+.d7{animation-delay:.65s!important}.d8{animation-delay:.75s!important}
+
+/* TYPOGRAPHY */
+.label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--sky);text-transform:uppercase;margin-bottom:10px}
+.h1{font-family:'Inter',sans-serif;font-size:clamp(28px,4vw,54px);font-weight:800;letter-spacing:-0.5px;line-height:1.1;margin-bottom:20px}
+.h1 em{color:var(--sky);font-style:normal;font-weight:900}
+.h2{font-family:'Inter',sans-serif;font-size:clamp(20px,2.5vw,30px);font-weight:700;letter-spacing:-0.3px;line-height:1.2;margin-bottom:6px}
+.body{font-size:clamp(12px,1.15vw,14px);color:var(--silver);line-height:1.65}
+
+/* CARDS */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:clamp(14px,2vw,22px);
+  transition:border-color .2s,transform .2s;
+  position:relative;overflow:hidden;
+}
+.card:hover{border-color:var(--blue-light);transform:translateY(-2px)}
+.card-accent{position:absolute;top:0;left:0;right:0;height:3px}
+.card .h2{font-size:clamp(13px,1.3vw,15px);margin-bottom:5px}
+.card .body{font-size:clamp(11px,1vw,12.5px)}
+
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,1.5vw,18px)}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:clamp(10px,1.3vw,16px)}
+
+/* TAGS */
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 8px;border-radius:4px;margin-top:10px}
+.tag-blue{background:rgba(37,99,235,.15);color:#60a5fa;border:1px solid rgba(37,99,235,.25)}
+.tag-green{background:rgba(5,150,105,.15);color:#34d399;border:1px solid rgba(5,150,105,.25)}
+.tag-amber{background:rgba(217,119,6,.15);color:#fbbf24;border:1px solid rgba(217,119,6,.25)}
+
+/* DIVIDER */
+.rule{height:1px;background:var(--border);margin:0}
+
+/* ═══════════════════════════════
+   S1 — COVER
+═══════════════════════════════ */
+#s1{justify-content:center;align-items:center;text-align:center;background:var(--bg)}
+#s1 .rings{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#s1 .rings svg{opacity:.06}
+#s1 .wrap{position:relative;z-index:1;max-width:680px}
+#s1 .big{
+  font-family:'Inter',sans-serif;
+  font-size:clamp(64px,10vw,110px);font-weight:900;letter-spacing:-4px;
+  line-height:.9;letter-spacing:-2px;
+  background:linear-gradient(160deg,var(--white) 30%,var(--sky) 80%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:20px;
+}
+#s1 .tagline{font-size:clamp(15px,2vw,20px);color:var(--silver);font-weight:300;line-height:1.6;max-width:500px;margin:0 auto 28px}
+#s1 .pills{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+#s1 .pill{
+  font-size:12px;color:var(--silver);
+  border:1px solid var(--border);background:var(--surface);
+  padding:7px 16px;border-radius:40px;
+  display:flex;align-items:center;gap:6px;
+}
+#s1 .pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--sky)}
+
+/* ═══════════════════════════════
+   S2 — PROBLEM
+═══════════════════════════════ */
+#s2{gap:0}
+.prob-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.prob-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:22px;
+  border-top:3px solid var(--red);
+}
+.prob-card .icon{font-size:28px;margin-bottom:12px}
+.prob-card .label-red{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:8px}
+.prob-stat{font-family:'Inter',sans-serif;font-size:40px;font-weight:900;letter-spacing:-1px;color:var(--red);margin-top:12px;line-height:1}
+.prob-stat-l{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ═══════════════════════════════
+   S3 — HOW IT WORKS
+═══════════════════════════════ */
+.steps-wrap{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.step{
+  display:grid;grid-template-columns:52px 1fr;
+  gap:0;align-items:stretch;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+}
+.step-num{
+  background:var(--surface2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:16px 0;border-right:1px solid var(--border);
+}
+.step-num .n{font-family:'Inter',sans-serif;font-size:22px;font-weight:900;letter-spacing:-1px;color:var(--blue-light);line-height:1}
+.step-num .icon{font-size:16px;margin-top:4px}
+.step-body{padding:14px 18px}
+.step-body h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(12px,1.2vw,14px);font-weight:700;margin-bottom:4px}
+.step-body p{font-size:clamp(11px,1vw,12.5px);color:var(--silver);line-height:1.55}
+
+/* ═══════════════════════════════
+   S4 — BUSINESS PROTECTION
+═══════════════════════════════ */
+.bp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+.bp-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:18px;
+  border-left:3px solid var(--blue);
+}
+.bp-card h3{font-size:clamp(12px,1.2vw,14px);font-weight:700;margin-bottom:5px}
+.bp-card p{font-size:clamp(10px,1vw,12px);color:var(--silver);line-height:1.55}
+
+/* ═══════════════════════════════
+   S5 — SAFETY
+═══════════════════════════════ */
+.hz-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.hz{
+  display:flex;align-items:center;gap:14px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;
+  transition:border-color .2s;
+}
+.hz:hover{border-color:rgba(217,119,6,.4)}
+.hz-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.hz-t{flex:1}
+.hz-t h4{font-size:clamp(11px,1.1vw,13px);font-weight:700;margin-bottom:2px}
+.hz-t p{font-size:clamp(10px,.95vw,11.5px);color:var(--silver);line-height:1.45}
+.conf{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.hi{background:rgba(5,150,105,.15);color:#34d399;border:1px solid rgba(5,150,105,.2)}
+.md{background:rgba(217,119,6,.12);color:#fbbf24;border:1px solid rgba(217,119,6,.2)}
+
+/* ═══════════════════════════════
+   S6 — BEFORE / AFTER
+═══════════════════════════════ */
+.ba-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.ba{border-radius:12px;padding:clamp(16px,2vw,24px);border:1px solid var(--border)}
+.ba.bef{background:rgba(220,38,38,.05);border-top:3px solid var(--red)}
+.ba.aft{background:rgba(5,150,105,.05);border-top:3px solid var(--green)}
+.ba-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;margin-bottom:14px}
+.bef .ba-lbl{color:var(--red)}.aft .ba-lbl{color:var(--green)}
+.ba-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:9px;font-size:clamp(11px,1.05vw,13px);color:var(--silver);line-height:1.5}
+.ba-ic{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;margin-top:1px}
+.bef .ba-ic{background:rgba(220,38,38,.2);color:#f87171}.aft .ba-ic{background:rgba(5,150,105,.2);color:#34d399}
+
+/* ═══════════════════════════════
+   S7 — ALERT DEMO
+═══════════════════════════════ */
+#s7{flex-direction:row;justify-content:center;align-items:center;gap:clamp(28px,5vw,70px);flex-wrap:wrap}
+#s7 .left{flex:1;max-width:460px}
+.phone-wrap{flex-shrink:0}
+.phone{
+  width:clamp(210px,22vw,255px);
+  background:#111827;border-radius:30px;
+  border:1.5px solid rgba(255,255,255,0.12);
+  padding:16px 13px;
+  box-shadow:0 30px 70px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.notch{width:80px;height:22px;background:#0a0a12;border-radius:0 0 16px 16px;margin:0 auto 14px}
+.alert-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:12px;margin-bottom:9px}
+.alert-hdr{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.alert-ico{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);display:flex;align-items:center;justify-content:center;font-size:12px}
+.alert-app{font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;font-weight:700;color:#60a5fa}
+.alert-time{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-left:auto}
+.alert-sev{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:7.5px;letter-spacing:1px;padding:2px 5px;border-radius:3px;margin-bottom:5px}
+.sev-crit{background:rgba(220,38,38,.18);color:#f87171;border:1px solid rgba(220,38,38,.25)}
+.sev-high{background:rgba(217,119,6,.14);color:#fbbf24;border:1px solid rgba(217,119,6,.22)}
+.alert-title{font-size:12px;font-weight:700;margin-bottom:3px}
+.alert-body{font-size:10px;color:var(--silver);line-height:1.45}
+.alert-cam{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:5px}
+.alert-btns{display:flex;gap:6px;margin-top:8px}
+.abtn{flex:1;padding:5px;border-radius:7px;font-size:9px;font-weight:700;text-align:center;font-family:'Plus Jakarta Sans',sans-serif}
+.abtn.p{background:#1d4ed8;color:#fff}.abtn.s{background:rgba(255,255,255,.07);color:var(--silver)}
+
+/* ═══════════════════════════════
+   S8 — WHY
+═══════════════════════════════ */
+.why-wrap{display:flex;flex-direction:column;gap:clamp(14px,2vw,20px);margin-top:8px}
+.why{display:flex;align-items:flex-start;gap:18px;padding-bottom:clamp(14px,2vw,20px);border-bottom:1px solid var(--border)}
+.why:last-child{border-bottom:none;padding-bottom:0}
+.why-n{font-family:'Inter',sans-serif;font-size:clamp(32px,4vw,48px);font-weight:900;letter-spacing:-1px;color:rgba(14,165,233,.12);line-height:1;min-width:52px;flex-shrink:0}
+.why h3{font-size:clamp(13px,1.3vw,15px);font-weight:700;margin-bottom:4px}
+.why p{font-size:clamp(11px,1.05vw,13px);color:var(--silver);line-height:1.6}
+
+/* ═══════════════════════════════
+   S9 — PILOT
+═══════════════════════════════ */
+#s9{justify-content:center;align-items:center}
+.pbox{
+  background:var(--surface);border:1px solid var(--border);
+  border-top:4px solid var(--blue);
+  border-radius:16px;
+  padding:clamp(28px,4vw,48px) clamp(32px,5vw,60px);
+  text-align:center;max-width:740px;width:100%;
+  position:relative;z-index:1;
+}
+.pbox::before{
+  content:'';position:absolute;inset:0;border-radius:16px;
+  background:radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.08),transparent 70%);
+  pointer-events:none;
+}
+.p-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--sky);margin-bottom:10px}
+.p-title{font-family:'Inter',sans-serif;font-size:clamp(32px,5vw,58px);font-weight:900;letter-spacing:-2px;line-height:1.05;margin-bottom:10px}
+.p-sub{font-size:clamp(12px,1.3vw,15px);color:var(--silver);max-width:460px;margin:0 auto 28px;line-height:1.6}
+.p-stats{display:flex;justify-content:center;gap:clamp(20px,4vw,50px);margin-bottom:24px;flex-wrap:wrap}
+.pstat-v{font-family:'Inter',sans-serif;font-size:clamp(26px,3.5vw,38px);font-weight:900;letter-spacing:-1px;color:var(--sky)}
+.pstat-l{font-size:11px;color:var(--muted);margin-top:2px}
+.p-tags{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.p-tag{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:clamp(10px,1vw,12px);color:var(--silver)}
+
+/* ═══════════════════════════════
+   S10 — CONTACT
+═══════════════════════════════ */
+#s10{justify-content:center;align-items:center;text-align:center}
+#s10 .wrap{position:relative;z-index:1;max-width:600px}
+#s10 .big{
+  font-family:'Inter',sans-serif;
+  font-size:clamp(32px,5.5vw,68px);font-weight:900;letter-spacing:-2px;
+  background:linear-gradient(135deg,var(--white),var(--sky));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1.1;margin-bottom:8px;
+}
+#s10 .sub{font-size:clamp(13px,1.4vw,16px);color:var(--silver);margin-bottom:28px}
+#s10 .email-pill{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(11px,1.2vw,14px);color:var(--sky);
+  background:var(--surface);border:1px solid var(--border);
+  padding:12px 24px;border-radius:40px;margin-bottom:10px;
+}
+#s10 .web{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:30px}
+#s10 .quote{
+  font-family:'Inter',sans-serif;
+  font-style:italic;font-size:clamp(14px,1.6vw,18px);font-weight:400;
+  color:rgba(148,163,184,.5);line-height:1.7;
+  max-width:480px;margin:0 auto;
+}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  :root{--hh:48px;--nh:72px;}
+  .u,.ul,.sc{animation:none!important;opacity:1!important;transform:none!important;}
+  .slide{
+    padding:calc(var(--hh) + 16px) 18px calc(var(--nh) + 16px);
+    justify-content:flex-start;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .slide.on{overflow-y:auto;}
+  .g3,.bp-grid,.prob-grid{grid-template-columns:1fr}
+  .ba-wrap,.hz-grid{grid-template-columns:1fr}
+  #s7{flex-direction:column;gap:20px;align-items:flex-start;justify-content:flex-start;}
+  .phone-wrap{width:100%;display:flex;justify-content:center;}
+  #s7 .left p.body{display:none}
+  #s7 .left > div{display:none}
+  #s7 .left{max-width:100%}
+  .h1{font-size:clamp(22px,6vw,36px);margin-bottom:12px;line-height:1.15}
+  .prob-grid{gap:10px}
+  .prob-card{padding:16px}
+  .steps-wrap{gap:8px}
+  .step{grid-template-columns:44px 1fr}
+  .bp-grid{gap:10px}
+  .hz-grid{gap:8px}
+  .ba-wrap{gap:10px}
+  .why-wrap{gap:12px}
+  .why{padding-bottom:12px}
+  .why-n{font-size:28px;min-width:40px}
+  #s1{justify-content:flex-start;padding-top:calc(var(--hh) + 80px)}
+  #s9{justify-content:flex-start;}
+  #s10{justify-content:flex-start}
+  .pbox{padding:20px 18px}
+  .p-stats{gap:16px}
+  .rings{display:none}
+}
+@media(max-width:540px){
+  .g3,.bp-grid,.prob-grid,.g2{grid-template-columns:1fr}
+  .phone{width:100%;max-width:300px}
+  .phone-wrap{width:100%;display:flex;justify-content:center}
+  .prob-stat{font-size:32px}
+  .label{font-size:9px}
+  #s1 .big{font-size:clamp(52px,14vw,80px);letter-spacing:-3px}
+  #s1 .tagline{font-size:14px}
+  #s1 .pills{gap:8px}
+  #s1 .pill{font-size:11px;padding:6px 12px}
+  .nav{padding:6px 10px;gap:8px;bottom:10px}
+  .nbtn{width:40px;height:40px;font-size:15px}
+  .ndot{width:4px;height:4px}
+  .ndot.on{width:14px}
+  .nnum{font-size:9px}
+}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+<div id="prog"></div>
+
+<header class="hdr">
+  <div class="logo">Sentinel<span>.</span></div>
+  <div class="hdr-year">2026</div>
+</header>
+
+<div class="deck" id="deck">
+
+<!-- ══ S1 COVER ══ -->
+<div class="slide on" id="s1" data-t="Sentinel">
+  <div class="rings">
+    <svg width="900" height="700" viewBox="0 0 900 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="450" cy="350" r="160" stroke="#2563eb" stroke-width="1"/>
+      <circle cx="450" cy="350" r="240" stroke="#2563eb" stroke-width=".6"/>
+      <circle cx="450" cy="350" r="330" stroke="#0ea5e9" stroke-width=".4"/>
+      <circle cx="450" cy="350" r="420" stroke="#0ea5e9" stroke-width=".3"/>
+      <!-- cross hairs -->
+      <line x1="450" y1="140" x2="450" y2="190" stroke="#2563eb" stroke-width="1.5"/>
+      <line x1="450" y1="510" x2="450" y2="560" stroke="#2563eb" stroke-width="1.5"/>
+      <line x1="240" y1="350" x2="290" y2="350" stroke="#2563eb" stroke-width="1.5"/>
+      <line x1="610" y1="350" x2="660" y2="350" stroke="#2563eb" stroke-width="1.5"/>
+      <!-- camera icon -->
+      <rect x="405" y="316" width="90" height="60" rx="8" stroke="#0ea5e9" stroke-width="1.5" fill="none"/>
+      <circle cx="450" cy="346" r="14" stroke="#0ea5e9" stroke-width="1.5" fill="none"/>
+      <circle cx="450" cy="346" r="5" fill="#0ea5e9" opacity=".5"/>
+      <rect x="478" y="322" width="14" height="10" rx="2" fill="#0ea5e9" opacity=".4"/>
+      <!-- dots on ring -->
+      <circle cx="450" cy="190" r="3" fill="#0ea5e9"/>
+      <circle cx="610" cy="350" r="3" fill="#0ea5e9"/>
+      <circle cx="450" cy="510" r="3" fill="#0ea5e9"/>
+      <circle cx="290" cy="350" r="3" fill="#0ea5e9"/>
+    </svg>
+  </div>
+  <div class="wrap">
+    <div class="label u d1">AI SURVEILLANCE PLATFORM</div>
+    <div class="big u d2">SENTINEL</div>
+    <div class="tagline u d3">Your restaurant, protected in real time — from theft, aggression, fire, and every emergency that cameras see but humans miss.</div>
+    <div class="pills u d4">
+      <span class="pill">Zero hardware changes</span>
+      <span class="pill">Live WhatsApp alerts</span>
+      <span class="pill">24/7 monitoring</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S2 PROBLEM ══ -->
+<div class="slide" id="s2" data-t="The Problem">
+  <div class="label u d1">01 — THE PROBLEM</div>
+  <div class="h1 u d2">Your cameras are watching.<br><em>But nobody is listening.</em></div>
+  <div class="prob-grid">
+    <div class="prob-card u d3">
+      <div class="icon">💸</div>
+      <div class="label-red">Staff Theft</div>
+      <div class="body">On average, 3–5% of restaurant revenue is lost to internal theft. Most owners discover it weeks later — if at all.</div>
+      <div class="prob-stat">5%</div>
+      <div class="prob-stat-l">of revenue lost silently every month</div>
+    </div>
+    <div class="prob-card u d4">
+      <div class="icon">⚠️</div>
+      <div class="label-red">Safety Incidents</div>
+      <div class="body">Fires, injuries, collapses — nobody sees them live. The footage only gets checked after the damage is done.</div>
+      <div class="prob-stat">72%</div>
+      <div class="prob-stat-l">of incidents happen with no live witness</div>
+    </div>
+    <div class="prob-card u d5">
+      <div class="icon">👁️</div>
+      <div class="label-red">Reactive Only</div>
+      <div class="body">Standard CCTV records everything but warns about nothing. By the time you check, the loss has already happened.</div>
+      <div class="prob-stat">0</div>
+      <div class="prob-stat-l">real-time alerts from standard CCTV</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S3 HOW IT WORKS ══ -->
+<div class="slide" id="s3" data-t="How It Works">
+  <div class="label u d1">02 — HOW IT WORKS</div>
+  <div class="h1 u d2" style="margin-bottom:4px">Simple to set up.<br><em>Powerful from day one.</em></div>
+  <div class="steps-wrap">
+    <div class="step u d3">
+      <div class="step-num"><div class="n">1</div><div class="icon">📡</div></div>
+      <div class="step-body"><h3>Connect to your existing cameras</h3><p>A small piece of software is installed on any computer in your restaurant. It taps into your existing camera feed — nothing changes, no new hardware, takes under 15 minutes.</p></div>
+    </div>
+    <div class="step u d4">
+      <div class="step-num"><div class="n">2</div><div class="icon">🤖</div></div>
+      <div class="step-body"><h3>AI watches every camera, every second</h3><p>Our system continuously analyses your live feed — looking for theft, aggression, fire, smoke, sparks, medical emergencies, blocked exits, and more. 24 hours a day, no operator needed.</p></div>
+    </div>
+    <div class="step u d5">
+      <div class="step-num"><div class="n">3</div><div class="icon">📱</div></div>
+      <div class="step-body"><h3>You get a WhatsApp alert within seconds</h3><p>The moment something is detected, you receive an instant notification with a photo, a plain-language description of what happened, and which camera it came from — even when you're away.</p></div>
+    </div>
+    <div class="step u d6">
+      <div class="step-num"><div class="n">4</div><div class="icon">🗂️</div></div>
+      <div class="step-body"><h3>Every incident is logged automatically</h3><p>Timestamped photo, severity level, camera source — stored permanently and ready for insurance claims, police reports, or HR reviews whenever you need them.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S4 BUSINESS PROTECTION ══ -->
+<div class="slide" id="s4" data-t="Business Protection">
+  <div class="label u d1">03 — PILLAR ONE</div>
+  <div class="h1 u d2" style="font-size:clamp(24px,3.2vw,42px);margin-bottom:4px"><em>Business Protection</em></div>
+  <div class="body u d2" style="margin-bottom:0;color:var(--silver)">What we watch for inside your restaurant</div>
+  <div class="bp-grid">
+    <div class="bp-card u d3"><h3>Staff Theft Detection</h3><p>Employee removing cash, food, or products without completing a legitimate transaction — flagged the moment it happens.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+    <div class="bp-card u d4"><h3>Shoplifting Behavior</h3><p>Customer concealing products, leaving without paying, or exhibiting known theft patterns near exits or counters.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+    <div class="bp-card u d5"><h3>Fighting & Aggression</h3><p>Physical altercation or threatening behavior detected as it develops — before it escalates into something worse.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+    <div class="bp-card u d6" style="animation-delay:.55s!important"><h3>Unauthorized Access</h3><p>Any person entering a restricted zone — stockroom, back office, or staff-only area — triggers an immediate alert.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+    <div class="bp-card u" style="animation-delay:.65s!important"><h3>After-Hours Intrusion</h3><p>Any movement in the restaurant when it should be empty — break-ins, trespassers, unauthorized staff presence.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+    <div class="bp-card u" style="animation-delay:.75s!important"><h3>Loitering Detection</h3><p>Someone remaining near a counter, cash area, or exit for an unusually long time — automatically flagged.</p><span class="tag tag-blue">CONFIRMED CAPABLE</span></div>
+  </div>
+</div>
+
+<!-- ══ S5 SAFETY ══ -->
+<div class="slide" id="s5" data-t="Safety & Emergency">
+  <div class="label u d1">04 — PILLAR TWO</div>
+  <div class="h1 u d2" style="font-size:clamp(24px,3.2vw,42px);margin-bottom:4px"><em>Safety & Emergency</em></div>
+  <div class="body u d2" style="margin-bottom:0">Physical hazards detected and reported in real time</div>
+  <div class="hz-grid">
+    <div class="hz u d3"><div class="hz-icon" style="background:rgba(220,38,38,.15)">🔥</div><div class="hz-t"><h4>Visible Fire Detection</h4><p>Open flame beyond the normal cooking area — immediate alert before it spreads.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u d4"><div class="hz-icon" style="background:rgba(220,38,38,.15)">💨</div><div class="hz-t"><h4>Smoke Detection</h4><p>Visible smoke in kitchen, dining area, or near electrical equipment — caught early.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u d5"><div class="hz-icon" style="background:rgba(217,119,6,.15)">⚡</div><div class="hz-t"><h4>Electrical Sparks</h4><p>Bright sparks near appliances or fittings — a visual warning sign before fire starts.</p></div><span class="conf md">MEDIUM</span></div>
+    <div class="hz u d6"><div class="hz-icon" style="background:rgba(220,38,38,.15)">🚨</div><div class="hz-t"><h4>Person Collapsed</h4><p>Staff or customer motionless on the floor — alert sent within seconds so help can arrive.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u" style="animation-delay:.65s!important"><div class="hz-icon" style="background:rgba(217,119,6,.15)">🚪</div><div class="hz-t"><h4>Blocked Emergency Exit</h4><p>A box, trolley, or crowd blocking a fire exit — a legal compliance risk flagged automatically.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u" style="animation-delay:.75s!important"><div class="hz-icon" style="background:rgba(37,99,235,.15)">👥</div><div class="hz-t"><h4>Overcrowding</h4><p>Area exceeds safe capacity — staff alerted to manage flow before it becomes a hazard.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u" style="animation-delay:.85s!important"><div class="hz-icon" style="background:rgba(217,119,6,.15)">🩹</div><div class="hz-t"><h4>Slip &amp; Fall</h4><p>Incident captured immediately with timestamp — critical for insurance and liability.</p></div><span class="conf hi">HIGH</span></div>
+    <div class="hz u" style="animation-delay:.95s!important"><div class="hz-icon" style="background:rgba(37,99,235,.15)">🛡️</div><div class="hz-t"><h4>Aggression Toward Staff</h4><p>Customer threatening or confronting staff — documented automatically with evidence.</p></div><span class="conf hi">HIGH</span></div>
+  </div>
+</div>
+
+<!-- ══ S6 BEFORE / AFTER ══ -->
+<div class="slide" id="s6" data-t="Before & After">
+  <div class="label u d1">05 — THE DIFFERENCE</div>
+  <div class="h1 u d2" style="margin-bottom:4px">Before Sentinel. <em>After Sentinel.</em></div>
+  <div class="ba-wrap">
+    <div class="ba bef u d3">
+      <div class="ba-lbl">WITHOUT SENTINEL</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>Theft discovered days later during a stock-take</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>Fight escalates before any staff member notices</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>Fire noticed only when smoke fills the room</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>Staff member collapses — not found for several minutes</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>Emergency exit blocked all day without anyone knowing</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>No usable evidence when an insurance claim comes in</div>
+      <div class="ba-row"><div class="ba-ic">✕</div>You leave the restaurant and spend the evening worrying</div>
+    </div>
+    <div class="ba aft u d4">
+      <div class="ba-lbl">WITH SENTINEL</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Flagged the moment it happens — alert sent within seconds</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Aggressive behavior detected as it develops — intervene early</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Visible smoke and sparks detected and reported immediately</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Person down triggers an alert within seconds of falling</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Exit obstruction flagged automatically — compliance maintained</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Every incident timestamped with a photo — always ready</div>
+      <div class="ba-row"><div class="ba-ic">✓</div>Silence means everything is fine. An alert means act now.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S7 ALERT DEMO ══ -->
+<div class="slide" id="s7" data-t="What You Receive">
+  <div class="left u d1">
+    <div class="label">06 — WHAT YOU RECEIVE</div>
+    <div class="h1" style="font-size:clamp(26px,3.8vw,48px)">Alerts on your<br><em>WhatsApp.</em><br>Instantly.</div>
+    <p class="body" style="max-width:360px;margin-bottom:18px">Every alert includes a snapshot photo, a plain-language description of what happened, the exact camera and time. No jargon — just what you need to decide whether to act.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--silver)"><span style="color:var(--green);font-size:15px">✓</span> Instant WhatsApp notification with snapshot photo</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--silver)"><span style="color:var(--green);font-size:15px">✓</span> Works even when you're away from the business</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--silver)"><span style="color:var(--green);font-size:15px">✓</span> Full incident history always stored and searchable</div>
+    </div>
+  </div>
+  <div class="phone-wrap u d3">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="alert-card">
+        <div class="alert-hdr"><div class="alert-ico">🛡</div><div class="alert-app">SENTINEL</div><div class="alert-time">just now</div></div>
+        <div class="alert-sev sev-crit">● CRITICAL</div>
+        <div class="alert-title">Staff Theft Detected</div>
+        <div class="alert-body">Individual behind counter removing item from register area and placing in personal bag.</div>
+        <div class="alert-cam">📷 Camera 2 — Main Counter &nbsp;·&nbsp; 14:32:07</div>
+        <div class="alert-btns"><div class="abtn p">View Snapshot</div><div class="abtn s">Dismiss</div></div>
+      </div>
+      <div class="alert-card">
+        <div class="alert-hdr"><div class="alert-ico">🛡</div><div class="alert-app">SENTINEL</div><div class="alert-time">4 min ago</div></div>
+        <div class="alert-sev sev-high">● HIGH</div>
+        <div class="alert-title">Smoke Detected</div>
+        <div class="alert-body">Visible smoke near kitchen equipment. Recommend immediate inspection.</div>
+        <div class="alert-cam">📷 Camera 4 — Kitchen &nbsp;·&nbsp; 14:28:51</div>
+        <div class="alert-btns"><div class="abtn p">View Snapshot</div><div class="abtn s">Dismiss</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S8 WHY SENTINEL ══ -->
+<div class="slide" id="s8" data-t="Why Sentinel">
+  <div style="max-width:860px;width:100%;margin:0 auto">
+    <div class="label u d1">07 — WHY SENTINEL</div>
+    <div class="h1 u d2">Why this is <em>different.</em></div>
+    <div class="why-wrap">
+      <div class="why u d3"><div class="why-n">01</div><div><h3>No new hardware, zero disruption to your operations</h3><p>Works with your existing cameras today. Nothing in how you run the restaurant changes. The install takes under 15 minutes on a computer you already own.</p></div></div>
+      <div class="why u d4"><div class="why-n">02</div><div><h3>Protection and safety — both pillars in one system</h3><p>Most tools focus only on theft. Sentinel monitors for business threats and physical safety hazards at the same time. One system, complete coverage, one monthly cost.</p></div></div>
+      <div class="why u d5"><div class="why-n">03</div><div><h3>Evidence created automatically — always ready</h3><p>Every incident is stored with a timestamped photo. For insurance, the police, HR, or legal proceedings — your evidence is ready before you even ask for it.</p></div></div>
+      <div class="why u d6"><div class="why-n">04</div><div><h3>Builds a culture of accountability without confrontation</h3><p>When staff know the system watches intelligently — not just records — behavior changes permanently. Theft drops. Standards improve. Without difficult conversations.</p></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S9 PILOT ══ -->
+<div class="slide" id="s9" data-t="30-Day Pilot">
+  <div class="label u d1" style="text-align:center">08 — THE OFFER</div>
+  <div class="pbox sc d2">
+    <div class="p-eyebrow">PILOT PROGRAM — 2026</div>
+    <div class="p-title">30 Days.<br>Zero Risk.</div>
+    <div class="p-sub">We install everything remotely, configure your cameras, and hand you a fully working system. You run it for 30 days. We handle everything — you just use it.</div>
+    <div class="p-stats">
+      <div><div class="pstat-v">30</div><div class="pstat-l">Day pilot</div></div>
+      <div><div class="pstat-v">8</div><div class="pstat-l">Cameras</div></div>
+      <div><div class="pstat-v">15</div><div class="pstat-l">Min to go live</div></div>
+      <div><div class="pstat-v">24/7</div><div class="pstat-l">Monitoring</div></div>
+    </div>
+    <div class="p-tags">
+      <div class="p-tag">✓ WhatsApp alerts included</div>
+      <div class="p-tag">✓ Full incident history</div>
+      <div class="p-tag">✓ Direct support line</div>
+      <div class="p-tag">✓ No hardware changes</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ S10 CONTACT ══ -->
+<div class="slide" id="s10" data-t="Contact">
+  <div class="wrap">
+    <div class="label u d1" style="text-align:center;margin-bottom:16px">GET IN TOUCH</div>
+    <div class="big u d2">Sentinel Technologies</div>
+    <div class="sub u d3">AI-Powered Surveillance Platform</div>
+    <div class="u d4"><div class="email-pill">✉ &nbsp;Zulqurnain@solverecapital.us</div></div>
+    <div class="web u d5">solverecapital.us</div>
+    <div class="quote u d6">"Your cameras are already there.<br>We just give them a brain."</div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<nav class="nav">
+  <button class="nbtn" id="prev">←</button>
+  <div class="ndots" id="dots"></div>
+  <button class="nbtn" id="next">→</button>
+  <div class="nnum" id="num">1 / 10</div>
+</nav>
+
+<script>
+const slides=[...document.querySelectorAll('.slide')];
+const dotsEl=document.getElementById('dots');
+const numEl=document.getElementById('num');
+const prog=document.getElementById('prog');
+let cur=0;
+
+slides.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='ndot'+(i===0?' on':'');
+  d.onclick=()=>go(i);
+  dotsEl.appendChild(d);
+});
+
+function go(n){
+  if(n<0||n>=slides.length)return;
+  slides[cur].classList.remove('on');
+  dotsEl.children[cur].classList.remove('on');
+  cur=n;
+  const sl=slides[cur];
+  sl.classList.add('on');
+  sl.querySelectorAll('.u,.ul,.sc').forEach(el=>{
+    const d=el.style.animationDelay;
+    el.style.animation='none';
+    void el.offsetWidth;
+    el.style.animation='';
+    if(d)el.style.animationDelay=d;
+  });
+  dotsEl.children[cur].classList.add('on');
+  numEl.textContent=`${cur+1} / ${slides.length}`;
+  prog.style.width=`${(cur+1)/slides.length*100}%`;
+}
+
+document.getElementById('prev').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();go(cur-1)});
+document.getElementById('next').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();go(cur+1)});
+document.getElementById('prev').addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();go(cur-1)},{passive:false});
+document.getElementById('next').addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();go(cur+1)},{passive:false});
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' '].includes(e.key)){e.preventDefault();go(cur+1)}
+  if(['ArrowLeft','ArrowUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+});
+let tx=0;
+document.addEventListener('touchstart',e=>tx=e.touches[0].clientX,{passive:true});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx;
+  if(Math.abs(dx)>40)go(cur+(dx<0?1:-1));
+},{passive:true});
+prog.style.width=`${1/slides.length*100}%`;
+</script>
+</body>
+</html>
